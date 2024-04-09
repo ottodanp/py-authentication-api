@@ -1,5 +1,5 @@
 from hashlib import sha256
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from uuid import uuid4
 
 import psycopg2
@@ -88,6 +88,14 @@ class DatabaseWrapper(DatabaseHandler):
     def __init__(self, host: str, port: int, database: str, user: str, password: str):
         super().__init__(host, port, database, user, password)
 
+    def get_user_id(self, username: str) -> str:
+        self.execute(
+            "SELECT user_id FROM users WHERE username = %s",
+            username
+        )
+        data = self.fetch()
+        return data[0][0]
+
     def get_user(self, user_id: str) -> User:
         self.execute(
             "SELECT * FROM users WHERE user_id = %s",
@@ -95,7 +103,7 @@ class DatabaseWrapper(DatabaseHandler):
         )
         return User(*self.fetch()[0])
 
-    def get_users(self) -> List[(str, str)]:
+    def get_users(self) -> List[Tuple[str, str]]:
         self.execute(
             "SELECT user_id, username FROM users"
         )
@@ -131,6 +139,16 @@ class DatabaseWrapper(DatabaseHandler):
 
         return user_id
 
+    def create_admin(self, username: str, password: str, application_id: str, email: str) -> str:
+        admin_id = str(uuid4())
+        self.execute(
+            "INSERT INTO admins (admin_id, username, password, application_id, email) VALUES (%s, %s, %s, %s, %s)",
+            admin_id, username, self.hash_password(password), application_id, email
+        )
+        self.commit()
+
+        return admin_id
+
     def delete_license_key(self, license_key: str) -> None:
         self.execute(
             "DELETE FROM license_keys WHERE license_key = %s",
@@ -145,9 +163,17 @@ class DatabaseWrapper(DatabaseHandler):
         )
         self.commit()
 
+    def get_application_id(self, registration_key: str) -> str:
+        self.execute(
+            "SELECT application_id FROM license_keys WHERE license_key_id = %s",
+            registration_key
+        )
+        data = self.fetch()
+        return data[0][0]
+
     def user_id_from_session(self, session_key: str) -> str:
         self.execute(
-            "SELECT user_id FROM sessions WHERE session_token = %s",
+            "SELECT user_id FROM sessions WHERE session_id = %s",
             session_key
         )
         data = self.fetch()
@@ -156,16 +182,41 @@ class DatabaseWrapper(DatabaseHandler):
     def create_session(self, user_id: str) -> str:
         session_token = str(uuid4())
         self.execute(
-            "INSERT INTO sessions (session_token, user_id) VALUES (%s, %s)",
+            "INSERT INTO sessions (session_id, user_id) VALUES (%s, %s)",
             session_token, user_id
         )
         self.commit()
 
         return session_token
 
+    def create_admin_session(self, user_id: str) -> str:
+        session_token = str(uuid4())
+        self.execute(
+            "INSERT INTO admin_sessions (session_id, admin_id) VALUES (%s, %s)",
+            session_token, user_id
+        )
+        self.commit()
+
+        return session_token
+
+    def get_admin_id(self, username: str) -> str:
+        self.execute(
+            "SELECT admin_id FROM admins WHERE username = %s",
+            username
+        )
+        data = self.fetch()
+        return data[0][0]
+
     def delete_session(self, session_token: str):
         self.execute(
-            "DELETE FROM sessions WHERE session_token = %s",
+            "DELETE FROM sessions WHERE session_id = %s",
+            session_token
+        )
+        self.commit()
+
+    def delete_admin_session(self, session_token: str):
+        self.execute(
+            "DELETE FROM admin_sessions WHERE session_id = %s",
             session_token
         )
         self.commit()
@@ -179,7 +230,7 @@ class DatabaseWrapper(DatabaseHandler):
 
     def validate_session(self, session_token: str) -> bool:
         self.execute(
-            "SELECT * FROM sessions WHERE session_token = %s",
+            "SELECT * FROM sessions WHERE session_id = %s",
             session_token
         )
         data = self.fetch()
@@ -187,7 +238,7 @@ class DatabaseWrapper(DatabaseHandler):
 
     def validate_admin_session(self, session_token: str) -> bool:
         self.execute(
-            "SELECT * FROM admin_sessions WHERE session_token = %s",
+            "SELECT * FROM admin_sessions WHERE session_id = %s",
             session_token
         )
         data = self.fetch()
@@ -195,7 +246,7 @@ class DatabaseWrapper(DatabaseHandler):
 
     def validate_registration_key(self, registration_key: str) -> bool:
         self.execute(
-            "SELECT * FROM registration_keys WHERE registration_key = %s",
+            "SELECT * FROM license_keys WHERE license_key_id = %s",
             registration_key
         )
         data = self.fetch()
@@ -204,6 +255,15 @@ class DatabaseWrapper(DatabaseHandler):
     def validate_credentials(self, username: str, password: str) -> Optional[str]:
         self.execute(
             "SELECT user_id FROM users WHERE username = %s AND password = %s",
+            username, self.hash_password(password)
+        )
+        data = self.fetch()
+        if len(data) > 0:
+            return data[0][0]
+
+    def validate_admin_credentials(self, username: str, password: str) -> Optional[str]:
+        self.execute(
+            "SELECT admin_id FROM admins WHERE username = %s AND password = %s",
             username, self.hash_password(password)
         )
         data = self.fetch()

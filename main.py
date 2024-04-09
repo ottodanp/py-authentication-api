@@ -45,10 +45,31 @@ class AuthenticationApi:
 
         # check if the credentials are valid
         if not self._database_handler.validate_credentials(username, password):
-            return {"error": "Invalid username or password"}, 400
+            return {"error": "Invalid username or password"}, 401
+
+        # fetch user ID
+        user_id = self._database_handler.get_user_id(username)
 
         # create a session token and return it
-        session_token = self._database_handler.create_session(username)
+        session_token = self._database_handler.create_session(user_id)
+        return {"session_token": session_token}, 200
+
+    @url_requirements(required_body=["username", "password"])
+    def admin_login(self):
+        data = request.json
+        # get username and password from request body
+        username = data["username"]
+        password = data["password"]
+
+        # check if the credentials are valid
+        if not self._database_handler.validate_admin_credentials(username, password):
+            return {"error": "Invalid username or password"}, 401
+
+        # get admin ID
+        admin_id = self._database_handler.get_admin_id(username)
+
+        # create a session token and return it
+        session_token = self._database_handler.create_admin_session(admin_id)
         return {"session_token": session_token}, 200
 
     @url_requirements(required_body=["username", "password", "registration_key", "email"])
@@ -64,8 +85,11 @@ class AuthenticationApi:
         if not self._database_handler.validate_registration_key(registration_key):
             return {"error": "Invalid registration key"}, 400
 
+        # get application ID
+        application_id = self._database_handler.get_application_id(registration_key)
+
         # create a new user and return the user id
-        user_id = self._database_handler.create_user(username, password, registration_key, email)
+        user_id = self._database_handler.create_user(username, password, application_id, email)
         return {"user_id": user_id}, 200
 
     @url_requirements(required_headers=["Authorization"], required_body=["new_password"])
@@ -164,6 +188,7 @@ class AuthenticationApi:
         self._app.route("/login", methods=["POST"])(self.login)
         self._app.route("/register", methods=["POST"])(self.register)
         self._app.route("/update_password", methods=["POST"])(self.update_password)
+        self._app.route("/admin_login", methods=["POST"])(self.admin_login)
         self._app.route("/generate_license_key", methods=["POST"])(self.generate_license_key)
         self._app.route("/delete_license_key", methods=["DELETE"])(self.delete_license_key)
         self._app.route("/view_users", methods=["GET"])(self.view_user_list)
