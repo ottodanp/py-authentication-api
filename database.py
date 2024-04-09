@@ -95,7 +95,7 @@ class DatabaseWrapper(DatabaseHandler):
         )
         return User(*self.fetch()[0])
 
-    def get_users(self) -> List[str, str]:
+    def get_users(self) -> List[(str, str)]:
         self.execute(
             "SELECT user_id, username FROM users"
         )
