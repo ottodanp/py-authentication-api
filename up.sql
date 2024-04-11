@@ -56,3 +56,4 @@ CREATE TABLE IF NOT EXISTS license_keys
     foreign key (application_id)
         references applications (application_id)
 );
+

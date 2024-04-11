@@ -6,6 +6,7 @@ import psycopg2
 
 
 class User:
+    _user_id: str
     _username: str
     _email: str
     _last_login_ip: Optional[str]
@@ -13,15 +14,24 @@ class User:
     _application_id: str
 
     def __init__(self, username: str, email: str, last_login_ip: Optional[str], registration_ip: Optional[str],
-                 application_id: str):
+                 application_id: str, user_id: str):
         self._username = username
         self._email = email
         self._last_login_ip = last_login_ip
         self._registration_ip = registration_ip
         self._application_id = application_id
+        self._user_id = user_id
 
-    def __str__(self):
-        return f"User(username={self._username}, email={self._email}, last_login={self._last_login_ip}, registration_ip={self._registration_ip}, application_id={self._application_id})"
+    @property
+    def as_dict(self) -> dict:
+        return {
+            "username": self._username,
+            "email": self._email,
+            "last_login_ip": self._last_login_ip,
+            "registration_ip": self._registration_ip,
+            "application_id": self._application_id,
+            "user_id": self._user_id
+        }
 
     @property
     def username(self) -> str:
@@ -83,6 +93,9 @@ class DatabaseHandler:
     def commit(self):
         self._connection.commit()
 
+    def rollback(self):
+        self._connection.rollback()
+
 
 class DatabaseWrapper(DatabaseHandler):
     def __init__(self, host: str, port: int, database: str, user: str, password: str):
@@ -101,11 +114,20 @@ class DatabaseWrapper(DatabaseHandler):
             "SELECT * FROM users WHERE user_id = %s",
             user_id
         )
-        return User(*self.fetch()[0])
+        user = self.fetch()[0]
+        return User(
+            user_id=user[0],
+            username=user[1],
+            email=user[3],
+            last_login_ip=user[5],
+            registration_ip=user[6],
+            application_id=user[7]
+        )
 
-    def get_users(self) -> List[Tuple[str, str]]:
+    def get_users(self, application_id: str) -> List[Tuple[str, str]]:
         self.execute(
-            "SELECT user_id, username FROM users"
+            "SELECT user_id, username FROM users WHERE application_id = %s",
+            application_id
         )
         return self.fetch()
 
@@ -151,7 +173,7 @@ class DatabaseWrapper(DatabaseHandler):
 
     def delete_license_key(self, license_key: str) -> None:
         self.execute(
-            "DELETE FROM license_keys WHERE license_key = %s",
+            "DELETE FROM license_keys WHERE license_key_id = %s",
             license_key
         )
         self.commit()

@@ -1,10 +1,10 @@
 from functools import wraps
-from typing import List, Tuple
-from typing import Optional
+from typing import List, Tuple, Optional
 
+import psycopg2.errors
 from flask import Flask, request
 
-from database import DatabaseWrapper
+from database import DatabaseWrapper, User
 
 
 def url_requirements(required_headers: Optional[List[str]] = None, required_body: Optional[List[str]] = None,
@@ -121,8 +121,12 @@ class AuthenticationApi:
             return {"error": "Unauthorized"}, 401
 
         # create a new license key and return it
-        license_key = self._database_handler.create_license_key(application_id)
-        return {"license_key": license_key}, 200
+        try:
+            license_key = self._database_handler.create_license_key(application_id)
+            return {"license_key": license_key}, 200
+        except psycopg2.errors.ForeignKeyViolation:
+            self._database_handler.rollback()
+            return {"error": "Invalid application id"}, 404
 
     @url_requirements(required_headers=["Authorization"], required_body=["license_key"])
     def delete_license_key(self) -> Tuple[dict, int]:
@@ -135,8 +139,12 @@ class AuthenticationApi:
         if not self._database_handler.validate_admin_session(session_key):
             return {"error": "Unauthorized"}, 401
 
+        if not self._database_handler.validate_registration_key(license_key):
+            return {"error": "Invalid license key"}, 404
+
         # delete the license key
         self._database_handler.delete_license_key(license_key)
+        return {"message": "License key deleted"}, 200
 
     @url_requirements(required_headers=["Authorization"], required_args_=["user_id"])
     def get_user_details(self) -> Tuple[dict, int]:
@@ -149,21 +157,28 @@ class AuthenticationApi:
             return {"error": "Unauthorized"}, 401
 
         # get the user details and return them
-        user = self._database_handler.get_user(user_id)
-        return user.__dict__, 200
+        try:
+            user = self._database_handler.get_user(user_id)
+            return user.as_dict, 200
+        except IndexError:
+            return {"error": "User not found"}, 404
 
-    @url_requirements(required_headers=["Authorization"])
-    def view_user_list(self) -> Tuple[List[dict], int] | Tuple[dict, int]:
+    @url_requirements(required_headers=["Authorization"], required_args_=["application_id"])
+    def view_user_list(self) -> Tuple[dict, int]:
         # get the session key from the headers
         session_key = request.headers["Authorization"]
+        application_id = request.args["application_id"]
 
         # check if the session key is valid
         if not self._database_handler.validate_admin_session(session_key):
             return {"error": "Unauthorized"}, 401
 
         # get the list of users and return them
-        users = self._database_handler.get_users()
-        return [{"username": u[0], "password": u[1]} for u in users], 200
+        users = self._database_handler.get_users(application_id)
+        if not users:
+            return {"error": "No users found"}, 404
+
+        return {"users": [{"user_id": u[0], "username": u[1]} for u in users]}, 200
 
     @url_requirements(required_headers=["Authorization"], required_body=["user_id"])
     def delete_user(self) -> Tuple[dict, int]:
@@ -180,6 +195,19 @@ class AuthenticationApi:
         self._database_handler.delete_user(user_id)
         return {"message": "User deleted"}, 200
 
+    @staticmethod
+    def sitemap() -> Tuple[str, int, dict]:
+        headers = {
+            "Content-Type": "application/xml"
+        }
+        return open("sitemap.xml", "r").read(), 200, headers
+    
+    @property
+    def json_response_headers(self) -> dict:
+        return {
+            "Content-Type": "application/json"
+        }
+
     def run(self):
         # connect to the database
         self._database_handler.connect()
@@ -194,7 +222,7 @@ class AuthenticationApi:
         self._app.route("/view_users", methods=["GET"])(self.view_user_list)
         self._app.route("/view_user", methods=["GET"])(self.get_user_details)
         self._app.route("/delete_user", methods=["DELETE"])(self.delete_user)
-        self._app.route("/sitemap.xml", methods=["GET"])(lambda: (open("sitemap.xml", "r").read(), 200))
+        self._app.route("/sitemap", methods=["GET"])(lambda: (open("sitemap.xml", "r").read(), 200))
 
         # run the app
         self._app.run()
