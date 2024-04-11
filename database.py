@@ -151,11 +151,11 @@ class DatabaseWrapper(DatabaseHandler):
 
         return license_key
 
-    def create_user(self, username: str, password: str, application_id: str, email: str) -> str:
+    def create_user(self, username: str, password: str, application_id: str, email: str, registration_ip: str) -> str:
         user_id = str(uuid4())
         self.execute(
-            "INSERT INTO users (user_id, username, password, application_id, email) VALUES (%s, %s, %s, %s, %s)",
-            user_id, username, self.hash_password(password), application_id, email
+            "INSERT INTO users (user_id, username, password, application_id, email, registration_ip) VALUES (%s, %s, %s, %s, %s, %s)",
+            user_id, username, self.hash_password(password), application_id, email, registration_ip
         )
         self.commit()
 
@@ -291,6 +291,13 @@ class DatabaseWrapper(DatabaseHandler):
         data = self.fetch()
         if len(data) > 0:
             return data[0][0]
+
+    def update_user_ip(self, user_id: str, ip: str) -> None:
+        self.execute(
+            "UPDATE users SET last_login_ip = %s WHERE user_id = %s",
+            ip, user_id
+        )
+        self.commit()
 
     @staticmethod
     def hash_password(password: str) -> str:

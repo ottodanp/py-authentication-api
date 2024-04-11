@@ -4,7 +4,7 @@ from typing import List, Tuple, Optional
 import psycopg2.errors
 from flask import Flask, request
 
-from database import DatabaseWrapper, User
+from database import DatabaseWrapper
 
 
 def url_requirements(required_headers: Optional[List[str]] = None, required_body: Optional[List[str]] = None,
@@ -42,6 +42,7 @@ class AuthenticationApi:
         # get username and password from request body
         username = data["username"]
         password = data["password"]
+        login_ip = request.remote_addr
 
         # check if the credentials are valid
         if not self._database_handler.validate_credentials(username, password):
@@ -49,6 +50,9 @@ class AuthenticationApi:
 
         # fetch user ID
         user_id = self._database_handler.get_user_id(username)
+
+        # set last login IP
+        self._database_handler.update_user_ip(login_ip, user_id)
 
         # create a session token and return it
         session_token = self._database_handler.create_session(user_id)
@@ -80,6 +84,7 @@ class AuthenticationApi:
         password = data["password"]
         registration_key = data["registration_key"]
         email = data["email"]
+        ip_address = request.remote_addr
 
         # check if the registration key is valid
         if not self._database_handler.validate_registration_key(registration_key):
@@ -89,7 +94,7 @@ class AuthenticationApi:
         application_id = self._database_handler.get_application_id(registration_key)
 
         # create a new user and return the user id
-        user_id = self._database_handler.create_user(username, password, application_id, email)
+        user_id = self._database_handler.create_user(username, password, application_id, email, ip_address)
         return {"user_id": user_id}, 200
 
     @url_requirements(required_headers=["Authorization"], required_body=["new_password"])
