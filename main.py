@@ -1,5 +1,5 @@
 from functools import wraps
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Callable, Any
 
 import psycopg2.errors
 from flask import Flask, request
@@ -8,10 +8,10 @@ from database import DatabaseWrapper
 
 
 def url_requirements(required_headers: Optional[List[str]] = None, required_body: Optional[List[str]] = None,
-                     required_args_: Optional[List[str]] = None):
-    def decorator(func):
+                     required_args_: Optional[List[str]] = None) -> Callable:
+    def decorator(func) -> Callable:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args, **kwargs) -> Tuple[dict, int] | Any:
             if required_headers and not all([header in request.headers for header in required_headers]):
                 return {"error": "Missing required headers"}, 400
 
@@ -59,7 +59,7 @@ class AuthenticationApi:
         return {"session_token": session_token}, 200
 
     @url_requirements(required_body=["username", "password"])
-    def admin_login(self):
+    def admin_login(self) -> Tuple[dict, int]:
         data = request.json
         # get username and password from request body
         username = data["username"]
@@ -206,7 +206,7 @@ class AuthenticationApi:
             "Content-Type": "application/xml"
         }
         return open("sitemap.xml", "r").read(), 200, headers
-    
+
     @property
     def json_response_headers(self) -> dict:
         return {
