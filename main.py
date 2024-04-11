@@ -140,6 +140,9 @@ class AuthenticationApi:
         license_key = data["license_key"]
         session_key = request.headers["Authorization"]
 
+        if not (self.validate_unique_key(license_key) and self.validate_unique_key(session_key)):
+            return {"error": "Invalid license key or session_key"}, 400
+
         # check if the session key is valid
         if not self._database_handler.validate_admin_session(session_key):
             return {"error": "Unauthorized"}, 401
@@ -156,6 +159,9 @@ class AuthenticationApi:
         # get the session key and user id from the headers and args
         session_key = request.headers["Authorization"]
         user_id = request.args["user_id"]
+
+        if not (self.validate_unique_key(user_id) and self.validate_unique_key(session_key)):
+            return {"error": "Invalid user_id or session_key"}, 400
 
         # check if the session key is valid
         if not self._database_handler.validate_admin_session(session_key):
@@ -174,6 +180,9 @@ class AuthenticationApi:
         session_key = request.headers["Authorization"]
         application_id = request.args["application_id"]
 
+        if not (self.validate_unique_key(application_id) and self.validate_unique_key(session_key)):
+            return {"error": "Invalid application_id or session_key"}, 400
+
         # check if the session key is valid
         if not self._database_handler.validate_admin_session(session_key):
             return {"error": "Unauthorized"}, 401
@@ -191,6 +200,10 @@ class AuthenticationApi:
         # get the user id and session key from the request body and headers
         user_id = data["user_id"]
         session_key = request.headers["Authorization"]
+
+        # validate the fomrat of the user ID and session key
+        if not (self.validate_unique_key(user_id) and self.validate_unique_key(session_key)):
+            return {"error": "Invalid user_id or session_key"}, 400
 
         # check if the session key is valid
         if not self._database_handler.validate_admin_session(session_key):
@@ -212,6 +225,10 @@ class AuthenticationApi:
         return {
             "Content-Type": "application/json"
         }
+
+    @staticmethod
+    def validate_unique_key(value: str) -> bool:
+        return isinstance(value, str) and len(value) == 36
 
     def run(self):
         # connect to the database
