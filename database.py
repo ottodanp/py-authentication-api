@@ -97,6 +97,7 @@ class DatabaseHandler:
         self._connection.rollback()
 
 
+# noinspection SqlResolve
 class DatabaseWrapper(DatabaseHandler):
     def __init__(self, host: str, port: int, database: str, user: str, password: str):
         super().__init__(host, port, database, user, password)
